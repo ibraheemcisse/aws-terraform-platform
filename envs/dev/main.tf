@@ -27,7 +27,7 @@ module "eks" {
   private_subnet_ids  = module.networking.private_subnet_ids
   public_subnet_ids   = module.networking.public_subnet_ids
   node_instance_types = ["t3.small"]
-  node_desired_size   = 2
+  node_desired_size   = 3
   node_min_size       = 1
   node_max_size       = 4
   node_disk_size      = 20
