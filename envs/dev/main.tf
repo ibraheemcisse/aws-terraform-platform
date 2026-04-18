@@ -44,3 +44,24 @@ module "alb_controller" {
   vpc_id            = module.networking.vpc_id
   tags              = local.common_tags
 }
+
+module "argocd" {
+  source = "../../modules/argocd"
+
+  cluster_name    = module.eks.cluster_name
+  environment     = var.environment
+  repo_url        = "https://github.com/ibraheemcisse/aws-terraform-platform"
+  target_revision = "main"
+  tags            = local.common_tags
+}
+
+module "observability" {
+  source = "../../modules/observability"
+
+  cluster_name              = module.eks.cluster_name
+  cluster_oidc_provider_arn = module.eks.oidc_provider_arn
+  cluster_oidc_provider_url = module.eks.oidc_provider_url
+  environment               = var.environment
+  log_retention_days        = 7
+  tags                      = local.common_tags
+}
