@@ -1,21 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: evershop
-  namespace: evershop
+  name: healthcare-api
+  namespace: healthcare
   labels:
-    app: evershop
+    app: healthcare-api
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
-      app: evershop
+      app: healthcare-api
   template:
     metadata:
       labels:
-        app: evershop
+        app: healthcare-api
     spec:
-      serviceAccountName: evershop-sa
       initContainers:
         - name: wait-for-postgres
           image: busybox:1.35
@@ -23,54 +22,35 @@ spec:
             - sh
             - -c
             - |
-              until nc -z postgres.evershop.svc.cluster.local 5432; do
+              until nc -z postgres.healthcare.svc.cluster.local 5432; do
                 echo "waiting for postgres..."
                 sleep 3
               done
       containers:
-        - name: evershop
-          image: evershop/evershop:latest
+        - name: healthcare-api
+          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/healthcare-api:v1.0.0
           imagePullPolicy: Always
           ports:
-            - containerPort: 3000
+            - containerPort: 8000
           env:
-            - name: DB_HOST
-              value: postgres.evershop.svc.cluster.local
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
-            - name: DB_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_DB
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: postgresql://healthcare:healthcare_dev_pass@postgres.healthcare.svc.cluster.local:5432/healthcare
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 128Mi
             limits:
-              cpu: 1000m
-              memory: 1Gi
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 3000
-            initialDelaySeconds: 120
-            periodSeconds: 15
-            failureThreshold: 10
+              cpu: 500m
+              memory: 256Mi
           livenessProbe:
             httpGet:
-              path: /
-              port: 3000
-            initialDelaySeconds: 180
-            periodSeconds: 30
-            failureThreshold: 5
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 5
