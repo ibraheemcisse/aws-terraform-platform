@@ -96,3 +96,40 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
   role       = aws_iam_role.ebs_csi.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 }
+# ── ECR PULL IRSA ROLE ────────────────────────────────────────────────
+# WAF:Security — pods pull from ECR using their own scoped identity
+# not the node IAM role
+data "aws_iam_policy_document" "ecr_pull_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:evershop:evershop-sa"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecr_pull" {
+  name               = "${var.cluster_name}-ecr-pull-role"
+  assume_role_policy = data.aws_iam_policy_document.ecr_pull_assume.json
+  tags               = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_pull" {
+  role       = aws_iam_role.ecr_pull.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}

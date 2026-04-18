@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evershop
+  namespace: evershop
+  labels:
+    app: evershop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: evershop
+  template:
+    metadata:
+      labels:
+        app: evershop
+    spec:
+      serviceAccountName: evershop-sa
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.35
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres.evershop.svc.cluster.local 5432; do
+                echo "waiting for postgres..."
+                sleep 3
+              done
+      containers:
+        - name: evershop
+          # image tag updated by GitHub Actions CI pipeline on each push
+          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/evershop:latest
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: evershop-config
+          env:
+            - name: DB_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
