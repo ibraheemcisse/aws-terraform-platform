@@ -29,7 +29,7 @@ spec:
               done
       containers:
         - name: evershop
-          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/evershop:v1.2.5
+          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/evershop:v1.2.6
           imagePullPolicy: Always
           ports:
             - containerPort: 80
