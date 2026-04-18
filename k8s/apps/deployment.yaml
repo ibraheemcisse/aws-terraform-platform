@@ -29,14 +29,25 @@ spec:
               done
       containers:
         - name: evershop
-          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/evershop:v1.2.6
+          image: evershop/evershop:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 80
-          envFrom:
-            - configMapRef:
-                name: evershop-config
+            - containerPort: 3000
           env:
+            - name: DB_HOST
+              value: postgres.evershop.svc.cluster.local
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -52,14 +63,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: 80
-            initialDelaySeconds: 60
+              port: 3000
+            initialDelaySeconds: 120
             periodSeconds: 15
-            failureThreshold: 6
+            failureThreshold: 10
           livenessProbe:
             httpGet:
               path: /
-              port: 80
-            initialDelaySeconds: 90
-            periodSeconds: 20
-            failureThreshold: 3
+              port: 3000
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 5
