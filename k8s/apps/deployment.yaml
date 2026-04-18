@@ -28,7 +28,7 @@ spec:
               done
       containers:
         - name: healthcare-api
-          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/healthcare-api:v1.0.0
+          image: 406260455716.dkr.ecr.us-east-1.amazonaws.com/healthcare-api:v1.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
