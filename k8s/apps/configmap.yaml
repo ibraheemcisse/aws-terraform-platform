@@ -4,8 +4,9 @@ metadata:
   name: evershop-config
   namespace: evershop
 data:
+  NODE_ENV: production
   DB_HOST: postgres.evershop.svc.cluster.local
   DB_PORT: "5432"
   DB_NAME: evershop
   DB_USER: evershop
-  NODE_ENV: production
+  PORT: "80"
