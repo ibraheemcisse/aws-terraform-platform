@@ -3,6 +3,7 @@
 **/*.tfstate.backup
 **/.terraform.lock.hcl
 *.tfvars
+!envs/dev/terraform.tfvars
 !*.example.tfvars
 .DS_Store
 Dockerfile
