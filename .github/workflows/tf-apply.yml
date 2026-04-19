@@ -6,6 +6,7 @@ on:
     paths:
       - 'envs/**'
       - 'modules/**'
+  workflow_dispatch:
 
 permissions:
   id-token: write

@@ -6,6 +6,7 @@ on:
     paths:
       - 'envs/**'
       - 'modules/**'
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -47,10 +48,8 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan
-        id: plan
         run: |
-          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
-          echo "exitcode=$?" >> $GITHUB_OUTPUT
+          terraform plan -no-color 2>&1 | tee plan_output.txt
 
       - name: Post plan to PR
         uses: actions/github-script@v7
