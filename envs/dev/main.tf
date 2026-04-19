@@ -65,3 +65,4 @@ module "observability" {
   log_retention_days        = 7
   tags                      = local.common_tags
 }
+# triggered
