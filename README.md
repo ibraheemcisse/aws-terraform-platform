@@ -149,11 +149,11 @@ EKS cluster with managed node groups in private subnets. OIDC provider is the fo
 
 | Role | Service Account | Purpose |
 |------|----------------|---------|
-| evershop-dev-ebs-csi-role | ebs-csi-controller-sa | Provision EBS volumes |
-| evershop-dev-ecr-pull-role | healthcare-api-sa | Pull images from ECR |
-| evershop-dev-alb-controller-role | aws-load-balancer-controller | Manage ALBs |
-| evershop-dev-cloudwatch-agent-role | cloudwatch-agent | Write metrics |
-| evershop-dev-fluent-bit-role | fluent-bit | Write logs |
+| {cluster}-ebs-csi-role | ebs-csi-controller-sa | Provision EBS volumes |
+| {cluster}-ecr-pull-role | healthcare-api-sa | Pull images from ECR |
+| {cluster}-alb-controller-role | aws-load-balancer-controller | Manage ALBs |
+| {cluster}-cloudwatch-agent-role | cloudwatch-agent | Write metrics |
+| {cluster}-fluent-bit-role | fluent-bit | Write logs |
 
 Each role is scoped with OIDC conditions on both `:sub` (service account) and `:aud` (STS) — least privilege, no wildcards.
 
@@ -182,7 +182,7 @@ Path:      k8s/apps/
 Sync:      automated, prune=true, selfHeal=true
 ```
 
-`selfHeal: true` means any manual `kubectl` change is automatically reverted. Git is always the source of truth.
+`selfHeal: true` means any manual `kubectl` change is automatically reverted within 3 minutes. Git is always the source of truth.
 
 **WAF:Reliability** — drift detection and auto-correction without manual intervention.
 **WAF:OpEx** — zero manual deployments, full audit trail via git history.
@@ -201,9 +201,9 @@ CloudWatch Container Insights with two components: CloudWatch Agent for metrics 
 
 **CloudWatch Alarms:**
 ```
-evershop-dev-node-cpu-high      → >80% CPU
-evershop-dev-node-memory-high   → >80% memory
-evershop-dev-pod-restarts-high  → >5 restarts in 5 minutes
+{cluster}-node-cpu-high      → >80% CPU
+{cluster}-node-memory-high   → >80% memory
+{cluster}-pod-restarts-high  → >5 restarts in 5 minutes
 ```
 
 Retention: 7 days (cost-optimised for non-production).
@@ -215,12 +215,12 @@ Retention: 7 days (cost-optimised for non-production).
 State is isolated per environment using separate S3 key paths and a shared DynamoDB lock table.
 
 ```
-S3 bucket: aws-terraform-platform-tfstate-406260455716
+S3 bucket: aws-terraform-platform-tfstate-{account_id}
 ├── dev/terraform.tfstate
 ├── staging/terraform.tfstate
 └── prod/terraform.tfstate
 
-DynamoDB: terraform-state-lock (shared, LockID per key)
+DynamoDB: terraform-state-lock (shared, LockID per key path)
 ```
 
 State locking prevents concurrent applies. If a process is killed mid-apply, run `terraform force-unlock <LOCK_ID>` after confirming no other apply is running.
@@ -298,7 +298,7 @@ kubectl get applications -n argocd
 ```bash
 cd envs/dev
 terraform destroy -auto-approve
-# Bootstrap resources (S3 + DynamoDB) intentionally excluded
+# Bootstrap resources (S3 + DynamoDB) intentionally preserved
 ```
 
 ---
@@ -307,7 +307,7 @@ terraform destroy -auto-approve
 
 ### Healthcare API (FastAPI + PostgreSQL)
 
-A production-grade REST API deployed as the platform workload. Chosen over EverShop due to build complexity — the right engineering call documented in [PM-003](#postmortems).
+A production-grade REST API deployed as the platform workload.
 
 **Endpoints:**
 ```
@@ -320,6 +320,7 @@ GET    /health                → health check (ALB + probes)
 ```
 
 **Structured logging** — every request emits JSON to stdout, enriched by Fluent Bit and shipped to CloudWatch:
+
 ```json
 {
   "levelname": "INFO",
@@ -335,7 +336,7 @@ GET    /health                → health check (ALB + probes)
 
 ## Well-Architected Framework
 
-Every architectural decision maps to a WAF pillar. This table is the reasoning made explicit.
+Every architectural decision maps to a WAF pillar. This table makes the reasoning explicit.
 
 | Pillar | Decision | Implementation |
 |--------|----------|----------------|
@@ -370,7 +371,7 @@ Real incidents encountered and resolved during the build. Documented here becaus
 |----|---------|------------|-----|
 | PM-001 | Node group CREATE_FAILED | Kubernetes 1.29 incompatibility | Upgraded to 1.30 |
 | PM-002 | t3.medium quota exceeded | Free tier constraint | Changed to t3.small |
-| PM-003 | EBS CSI addon timeout (20min) | No IRSA role — fell back to IMDS on private subnet | Added IRSA role with scoped trust policy |
+| PM-003 | EBS CSI addon timeout (20 min) | No IRSA role — fell back to IMDS on private subnet | Added IRSA role with scoped trust policy |
 | PM-004 | EverShop build failures | Missing dirs, musl vs glibc, wrong Node version | Switched to Healthcare API |
 | PM-005 | Postgres CrashLoopBackOff | EBS volume has lost+found, postgres init fails | Added PGDATA env var pointing to subdirectory |
 | PM-006 | PVC stuck terminating | Pod still holding volume reference | Patched finalizers, force deleted |
@@ -380,7 +381,7 @@ Real incidents encountered and resolved during the build. Documented here becaus
 | PM-010 | Node pod limit hit | t3.small hard limit of 11 pods per node | Scaled to 3 nodes |
 | PM-011 | DNS flapping to EKS endpoint | Local resolver issue | Added static entry to /etc/hosts |
 | PM-012 | ArgoCD reverting image tags | ArgoCD out of sync, overwriting manual patches | Force refresh + pinned image tags in Git |
-| PM-013 | GitHub Actions path filter | Empty commit didn't trigger workflow | Used workflow_dispatch for manual trigger |
+| PM-013 | GitHub Actions path filter | Empty commit did not trigger workflow | Used workflow_dispatch for manual trigger |
 
 Full postmortem writeups in [`postmortems/`](./postmortems/).
 
@@ -392,14 +393,13 @@ Full postmortem writeups in [`postmortems/`](./postmortems/).
 - **Blog post 2:** Reusable Terraform modules for multi-environment EKS
 - **Blog post 3:** End-to-end CI/CD on EKS — GitHub Actions + ArgoCD
 - **Blog post 4:** AWS Well-Architected Framework mapped to a real EKS platform
-- **YouTube:** Full walkthrough playlist
 
 ---
 
 ## Author
 
-**Ibrahim Cisse** — Infrastructure & SRE Engineer  
-AWS Community Builder (Containers) · Founder, Cloud Native Community Group Kuala Lumpur  
+**Ibrahim Cisse** — Infrastructure & SRE Engineer
+AWS Community Builder (Containers) · Member, Cloud Native Community Group Kuala Lumpur
 Organiser, KCD Kuala Lumpur 2026
 
 [LinkedIn](https://linkedin.com/in/ibraheemcisse) · [GitHub](https://github.com/ibraheemcisse) · [Medium](https://medium.com/@ibraheemcisse)
