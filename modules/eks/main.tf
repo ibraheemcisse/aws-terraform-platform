@@ -129,3 +129,23 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_iam_role_policy_attachment.ebs_csi,
   ]
 }
+
+# ── GITHUB ACTIONS EKS ACCESS ────────────────────────────────────────
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/github-actions-terraform-role"
+  type          = "STANDARD"
+  tags          = local.common_tags
+}
+
+resource "aws_eks_access_policy_association" "github_actions_admin" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/github-actions-terraform-role"
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.github_actions]
+}
