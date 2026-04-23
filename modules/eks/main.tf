@@ -149,3 +149,13 @@ resource "aws_eks_access_policy_association" "github_actions_admin" {
 
   depends_on = [aws_eks_access_entry.github_actions]
 }
+
+resource "aws_eks_addon" "pod_identity_agent" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "eks-pod-identity-agent"
+  addon_version               = "v1.3.0-eksbuild.1"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = var.tags
+}

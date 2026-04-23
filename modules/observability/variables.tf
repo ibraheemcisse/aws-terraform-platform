@@ -3,16 +3,6 @@ variable "cluster_name" {
   type        = string
 }
 
-variable "cluster_oidc_provider_arn" {
-  description = "OIDC provider ARN for IRSA"
-  type        = string
-}
-
-variable "cluster_oidc_provider_url" {
-  description = "OIDC provider URL for IRSA"
-  type        = string
-}
-
 variable "environment" {
   description = "Environment name"
   type        = string

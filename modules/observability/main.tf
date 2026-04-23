@@ -3,8 +3,6 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   })
-
-  oidc_url = replace(var.cluster_oidc_provider_url, "https://", "")
 }
 
 data "aws_caller_identity" "current" {}
@@ -35,31 +33,27 @@ resource "aws_cloudwatch_log_group" "dataplane" {
   tags              = local.common_tags
 }
 
-# ── IRSA ROLE FOR CLOUDWATCH AGENT ───────────────────────────────────
-data "aws_iam_policy_document" "cloudwatch_agent_assume" {
+# ── POD IDENTITY TRUST POLICY ─────────────────────────────────────────
+# WAF:Security — shared trust policy for all observability components
+# No OIDC provider reference — role is cluster-agnostic
+data "aws_iam_policy_document" "pod_identity_assume" {
   statement {
     effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
     principals {
-      type        = "Federated"
-      identifiers = [var.cluster_oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_url}:sub"
-      values   = ["system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_url}:aud"
-      values   = ["sts.amazonaws.com"]
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
     }
   }
 }
 
+# ── POD IDENTITY ROLE FOR CLOUDWATCH AGENT ───────────────────────────
 resource "aws_iam_role" "cloudwatch_agent" {
   name               = "${var.cluster_name}-cloudwatch-agent-role"
-  assume_role_policy = data.aws_iam_policy_document.cloudwatch_agent_assume.json
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
   tags               = local.common_tags
 }
 
@@ -68,31 +62,18 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
-# ── IRSA ROLE FOR FLUENT BIT ──────────────────────────────────────────
-data "aws_iam_policy_document" "fluent_bit_assume" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [var.cluster_oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_url}:sub"
-      values   = ["system:serviceaccount:amazon-cloudwatch:fluent-bit"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_url}:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-  }
+resource "aws_eks_pod_identity_association" "cloudwatch_agent" {
+  cluster_name    = var.cluster_name
+  namespace       = "amazon-cloudwatch"
+  service_account = "cloudwatch-agent"
+  role_arn        = aws_iam_role.cloudwatch_agent.arn
+  tags            = local.common_tags
 }
 
+# ── POD IDENTITY ROLE FOR FLUENT BIT ─────────────────────────────────
 resource "aws_iam_role" "fluent_bit" {
   name               = "${var.cluster_name}-fluent-bit-role"
-  assume_role_policy = data.aws_iam_policy_document.fluent_bit_assume.json
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
   tags               = local.common_tags
 }
 
@@ -116,6 +97,14 @@ resource "aws_iam_role_policy" "fluent_bit" {
   policy = data.aws_iam_policy_document.fluent_bit_policy.json
 }
 
+resource "aws_eks_pod_identity_association" "fluent_bit" {
+  cluster_name    = var.cluster_name
+  namespace       = "amazon-cloudwatch"
+  service_account = "fluent-bit"
+  role_arn        = aws_iam_role.fluent_bit.arn
+  tags            = local.common_tags
+}
+
 # ── CLOUDWATCH ALARMS ─────────────────────────────────────────────────
 resource "aws_cloudwatch_metric_alarm" "node_cpu_high" {
   alarm_name          = "${var.cluster_name}-node-cpu-high"
@@ -127,11 +116,9 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu_high" {
   statistic           = "Average"
   threshold           = 80
   alarm_description   = "Node CPU above 80%"
-
   dimensions = {
     ClusterName = var.cluster_name
   }
-
   tags = local.common_tags
 }
 
@@ -145,11 +132,9 @@ resource "aws_cloudwatch_metric_alarm" "node_memory_high" {
   statistic           = "Average"
   threshold           = 80
   alarm_description   = "Node memory above 80%"
-
   dimensions = {
     ClusterName = var.cluster_name
   }
-
   tags = local.common_tags
 }
 
@@ -163,10 +148,8 @@ resource "aws_cloudwatch_metric_alarm" "pod_restart_high" {
   statistic           = "Sum"
   threshold           = 5
   alarm_description   = "Pod restart count above 5"
-
   dimensions = {
     ClusterName = var.cluster_name
   }
-
   tags = local.common_tags
 }

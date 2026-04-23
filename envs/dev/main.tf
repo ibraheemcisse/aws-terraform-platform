@@ -37,12 +37,10 @@ module "eks" {
 module "alb_controller" {
   source = "../../modules/alb-controller"
 
-  cluster_name      = module.eks.cluster_name
-  environment       = var.environment
-  oidc_provider_arn = module.eks.oidc_provider_arn
-  oidc_provider_url = module.eks.oidc_provider_url
-  vpc_id            = module.networking.vpc_id
-  tags              = local.common_tags
+  cluster_name = module.eks.cluster_name
+  environment  = var.environment
+  vpc_id       = module.networking.vpc_id
+  tags         = local.common_tags
 }
 
 module "argocd" {
@@ -58,11 +56,8 @@ module "argocd" {
 module "observability" {
   source = "../../modules/observability"
 
-  cluster_name              = module.eks.cluster_name
-  cluster_oidc_provider_arn = module.eks.oidc_provider_arn
-  cluster_oidc_provider_url = module.eks.oidc_provider_url
-  environment               = var.environment
-  log_retention_days        = 7
-  tags                      = local.common_tags
+  cluster_name       = module.eks.cluster_name
+  environment        = var.environment
+  log_retention_days = 7
+  tags               = local.common_tags
 }
-# triggered

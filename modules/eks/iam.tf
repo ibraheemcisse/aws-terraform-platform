@@ -59,36 +59,27 @@ resource "aws_iam_role_policy_attachment" "node_ssm_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# ── EBS CSI IRSA ROLE ─────────────────────────────────────────────────
-# WAF:Security — IRSA scopes EBS CSI credentials to pod level
-# without this the driver falls back to IMDS which fails on private subnets
-data "aws_iam_policy_document" "ebs_csi_assume" {
+# ── EBS CSI POD IDENTITY ROLE ─────────────────────────────────────────
+# WAF:Security — Pod Identity scopes EBS CSI credentials to pod level
+# No OIDC provider needed — agent handles token exchange
+# No cluster-specific trust policy — role is portable across clusters
+data "aws_iam_policy_document" "pod_identity_assume" {
   statement {
     effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
     principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.eks.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
-      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud"
-      values   = ["sts.amazonaws.com"]
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
     }
   }
 }
 
 resource "aws_iam_role" "ebs_csi" {
   name               = "${var.cluster_name}-ebs-csi-role"
-  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
   tags               = var.tags
 }
 
@@ -96,40 +87,33 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
   role       = aws_iam_role.ebs_csi.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 }
-# ── ECR PULL IRSA ROLE ────────────────────────────────────────────────
-# WAF:Security — pods pull from ECR using their own scoped identity
-# not the node IAM role
-data "aws_iam_policy_document" "ecr_pull_assume" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
 
-    principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.eks.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
-      values   = ["system:serviceaccount:evershop:evershop-sa"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-  }
+resource "aws_eks_pod_identity_association" "ebs_csi" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "kube-system"
+  service_account = "ebs-csi-controller-sa"
+  role_arn        = aws_iam_role.ebs_csi.arn
+  tags            = var.tags
 }
 
+# ── ECR PULL POD IDENTITY ROLE ────────────────────────────────────────
+# WAF:Security — healthcare API pod pulls from ECR
+# using its own scoped identity, not the node IAM role
 resource "aws_iam_role" "ecr_pull" {
   name               = "${var.cluster_name}-ecr-pull-role"
-  assume_role_policy = data.aws_iam_policy_document.ecr_pull_assume.json
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_pull" {
   role       = aws_iam_role.ecr_pull.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_eks_pod_identity_association" "ecr_pull" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "healthcare"
+  service_account = "healthcare-sa"
+  role_arn        = aws_iam_role.ecr_pull.arn
+  tags            = var.tags
 }
