@@ -74,6 +74,11 @@ data "aws_iam_policy_document" "pod_identity_assume" {
       type        = "Service"
       identifiers = ["pods.eks.amazonaws.com"]
     }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = [aws_eks_cluster.this.arn]
+    }
   }
 }
 
