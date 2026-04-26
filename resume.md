@@ -107,7 +107,6 @@ Java 17, Spring Boot, Apache Kafka, Maven. Built as part of the JPMorgan Chase A
 
 ## Certifications
 
-- Certified Kubernetes Administrator (CKA)
 - AWS Solutions Architect Associate — SAA-C03 *(in progress)*
 - Microsoft Azure Fundamentals — AZ-900
 - Prometheus Monitoring & Alerting
@@ -126,9 +125,8 @@ Anglia Ruskin University, 2019
 ## Community
 
 - **AWS Community Builder** — Containers category
-- **Organiser, KCD Kuala Lumpur 2026** — Malaysia's first Kubernetes Community Days, 250+ expected attendees
+- **CNCF KL Chapter member, KCD Kuala Lumpur 2026** — Malaysia's first Kubernetes Community Days, 250+ expected attendees
 - **157+ published articles** — Medium, AWS CB Blog, Dev.to, Hashnode
-- **AI Evaluation Engineer** — evaluating LLM agents on real Kubernetes infrastructure at Bespoke Labs
 
 ---
 
