@@ -9,7 +9,7 @@ Kuala Lumpur, Malaysia · [ibrahimcisse@ioc-labs.com](mailto:ibrahimcisse@ioc-la
 
 I find hidden failures in production Kubernetes clusters before they become incidents.
 
-4 years operating infrastructure for fintech systems where downtime has direct financial impact — cryptocurrency exchanges and global forex trading platforms. I build the platform, document every failure, and write about both.
+4 years operating infrastructure for fintech systems where downtime has direct financial impact cryptocurrency exchanges and global forex trading platforms. I build the platform, document every failure, and write about both.
 
 - Resolved a cluster-wide failure affecting live trade execution in under 1 hour
 - Identified a silent CI/CD pipeline failure across 12 production servers — reduced deployment failures by 83%
@@ -25,7 +25,7 @@ I find hidden failures in production Kubernetes clusters before they become inci
 
 Designing adversarial Kubernetes evaluation environments for LLM agents on the Nebula Aurora platform.
 
-- Provisioned and hardened Kubernetes environments — RBAC, secret management, Istio service mesh, ingress access control
+- Provisioned and hardened Kubernetes environments RBAC, secret management, Istio service mesh, ingress access control
 - Engineered configuration drift mechanisms using CronJobs and scoped service accounts
 - Replaced nginx ingress with Istio AuthorizationPolicy for mTLS and workload identity validation
 - Maintained evaluation infrastructure across multiple concurrent LLM agent rollouts
@@ -37,7 +37,7 @@ Designing adversarial Kubernetes evaluation environments for LLM agents on the N
 
 Cryptocurrency exchange infrastructure — high-availability trading platform across 20+ production environments.
 
-- Resolved cluster-wide failure impacting live trade execution in under 1 hour — postmortem adopted as team standard
+- Resolved cluster-wide failure impacting live trade execution in under 1 hour postmortem adopted as team standard
 - Identified silent CI/CD pipeline reporting success while failing — eliminated invisible failure class across 12 servers, reduced deployment failures by 83%
 - Built AI-assisted PR review pipeline (Claude API + GitHub Actions) benchmarked against commercial tooling
 - Managed Terraform IaC across 20+ production exchange environments — zero static credentials
@@ -50,7 +50,7 @@ Cryptocurrency exchange infrastructure — high-availability trading platform ac
 
 Global forex platform — 24/7 infrastructure supporting millions of active traders.
 
-- Cut incident investigation time from 2 hours to 15 minutes — built ClickHouse SQL tooling enabling L1 resolution without escalation
+- Cut incident investigation time from 2 hours to 15 minutes, built ClickHouse SQL tooling enabling L1 resolution without escalation
 - On-call 3x/week — triaged incidents using Prometheus, Grafana, Datadog, PagerDuty
 - Led zero-downtime migration of thousands of live accounts — no user-facing incidents
 - Eliminated single-operator dependency on critical market data pipeline — automated, documented, mentored 3 engineers
