@@ -20,7 +20,7 @@ I find hidden failures in production Kubernetes clusters before they become inci
 
 ## Experience
 
-### AI Evaluation Engineer
+### Devops Engineer
 **Bespoke Labs** · Contract · Remote · Feb 2026 – Present
 
 Designing adversarial Kubernetes evaluation environments for LLM agents on the Nebula Aurora platform.
