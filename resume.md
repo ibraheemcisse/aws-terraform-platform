@@ -12,9 +12,9 @@ I find hidden failures in production Kubernetes clusters before they become inci
 4 years operating infrastructure for fintech systems where downtime has direct financial impact cryptocurrency exchanges and global forex trading platforms. I build the platform, document every failure, and write about both.
 
 - Resolved a cluster-wide failure affecting live trade execution in under 1 hour
-- Identified a silent CI/CD pipeline failure across 12 production servers — reduced deployment failures by 83%
+- Identified a silent CI/CD pipeline failure across 12 production servers, reduced deployment failures by 83%
 - Cut incident investigation time from 2 hours to 15 minutes in a live forex environment
-- Caught an EBS CSI CrashLoopBackOff after a Pod Identity migration — 11 restarts, no alert fired
+- Caught an EBS CSI CrashLoopBackOff after a Pod Identity migration. 11 restarts, no alert fired
 
 ---
 
