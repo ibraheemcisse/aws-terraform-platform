@@ -5,51 +5,9 @@ A production-grade EKS platform on AWS, provisioned entirely as code, delivering
 **Live endpoint:** `http://k8s-healthca-healthca-0f7ebab378-501580589.us-east-1.elb.amazonaws.com`
 
 ---
-
 ## Architecture
 
-```
-                          ┌─────────────────────────────────────────┐
-                          │           GitHub Repository              │
-                          │                                          │
-                          │  Terraform modules    K8s manifests      │
-                          │  ├── bootstrap/       ├── k8s/apps/      │
-                          │  ├── modules/         └── k8s/healthcare/│
-                          │  └── envs/dev/                           │
-                          └────────────┬─────────────────┬───────────┘
-                                       │                 │
-                                       ▼                 ▼
-                             GitHub Actions           ArgoCD
-                             (infrastructure)         (workloads)
-                             OIDC → AWS IAM           pull-based sync
-                                       │                 │
-                                       ▼                 ▼
-                          ┌────────────────────────────────────────┐
-                          │            AWS EKS Cluster             │
-                          │            evershop-dev (1.30)         │
-                          │                                        │
-                          │  ┌─────────────────────────────────┐  │
-                          │  │  kube-system                    │  │
-                          │  │  ├── aws-load-balancer-controller│  │
-                          │  │  ├── aws-ebs-csi-driver          │  │
-                          │  │  ├── coredns                     │  │
-                          │  │  └── fluent-bit + cw-agent       │  │
-                          │  └─────────────────────────────────┘  │
-                          │  ┌─────────────────────────────────┐  │
-                          │  │  healthcare                      │  │
-                          │  │  ├── healthcare-api (2 replicas) │  │
-                          │  │  └── postgres (StatefulSet)      │  │
-                          │  └─────────────────────────────────┘  │
-                          └────────────┬───────────────────────────┘
-                                       │
-                          ┌────────────▼───────────────────────────┐
-                          │         AWS Application Load Balancer   │
-                          │         internet-facing, IP mode        │
-                          └────────────────────────────────────────┘
-                                       │
-                                    Internet
-```
-
+![AWS EKS Platform — Terraform + GitOps](./docs/architecture.png)
 ---
 
 ## Stack
