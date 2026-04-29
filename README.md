@@ -1,8 +1,6 @@
-# AWS EKS Platform — Terraform + GitOps
+# AWS EKS Platform: Terraform + GitOps
 
 A production-grade EKS platform on AWS, provisioned entirely as code, delivering a containerised API via GitOps, with structured observability and automated CI/CD.
-
-**Live endpoint:** `http://k8s-healthca-healthca-0f7ebab378-501580589.us-east-1.elb.amazonaws.com`
 
 ---
 ## Architecture
