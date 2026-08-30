@@ -1,0 +1,76 @@
+# Postmortem #16 Legacy VPC Cleanup & Blackhole Route Discovery
+
+**Date:** 2026-08-30
+**Severity:** None (proactive cleanup, no production impact account was pre-production)
+**Status:** Resolved
+**Author:** Ibrahim Cisse
+
+---
+
+## Summary
+
+During a planned ground-up rebuild of the AWS Terraform Platform, a full account audit surfaced a leftover VPC (`vpc-0259a9db5d7a2cbb2`) from a prior, unrelated project (GPU-Infra). The VPC and its dependent resources were manually torn down to bring the account to a verified zero state before starting the rebuild. During teardown, a **blackhole route** was observed after detaching the Internet Gateway, providing a live example of a real AWS failure mode rather than a purely theoretical one.
+
+## Background
+
+The AWS Terraform Platform rebuild follows a strict sequence: audit → understand → predict cleanup order → execute → verify. Before any new infrastructure is provisioned, the account must be confirmed clean, so that nothing built later is validated against a false baseline.
+
+## Discovery
+
+An initial audit (`describe-vpcs`, `describe-nat-gateways`, `describe-addresses`, `describe-instances`) found no NAT Gateways, no unattached Elastic IPs, and no running instances — but one non-default VPC remained:
+
+| Resource | ID | CIDR |
+|---|---|---|
+| VPC | `vpc-0259a9db5d7a2cbb2` | `10.0.0.0/16` |
+
+Deeper inspection found this VPC contained:
+
+- One public subnet — `subnet-0bd21787f8c12a174` (`10.0.1.0/24`, `us-east-1a`)
+- A custom route table — `rtb-07c5580f5d27f9c36` — associated with that subnet, containing a `0.0.0.0/0 → igw-05a8ebbcdc240794c` route
+- The VPC's main route table — `rtb-022ccc9e84e4d5fe5` — local-only, no explicit associations (default fallback)
+- An attached Internet Gateway — `igw-05a8ebbcdc240794c`
+- Three security groups: `gpu-infra-cp-sg` (`sg-061735a5a326516ae`), `gpu-infra-worker-sg` (`sg-0c75db122a88e2e33`), and the VPC's `default` group
+
+The two named security groups (`gpu-infra-cp-sg`, `gpu-infra-worker-sg`) did not match anything in the AWS Terraform Platform architecture. They were confirmed to be leftovers from a separate, already-completed project ([GPU-Infra](https://github.com/ibraheemcisse/GPU-Infra)) — not a security incident, but a reminder that unrelated project resources can silently persist in a shared account if not explicitly torn down at project close.
+
+## Root Cause
+
+No active cause this was expected drift from not running a full teardown after the GPU-Infra project concluded. The VPC and its resources were simply never deleted once that project's work was done.
+
+## Resolution Deletion Sequence
+
+Resources in a VPC cannot be deleted out of dependency order; AWS blocks operations where an active attachment or association still exists. The following order was used, confirmed against AWS's actual behavior at each step rather than assumed:
+
+1. **Detach** the Internet Gateway (`igw-05a8ebbcdc240794c`) from the VPC — a required, separate action from deletion.
+2. **Disassociate** the subnet (`subnet-0bd21787f8c12a174`) from its custom route table (`rtb-07c5580f5d27f9c36`). The subnet automatically fell back to the VPC's main route table immediately upon disassociation — a subnet can never be left with zero route table association.
+3. **Delete** the now-unassociated custom route table (`rtb-07c5580f5d27f9c36`).
+4. **Delete** the subnet.
+5. **Delete** the Internet Gateway itself (post-detach).
+6. **Delete** the VPC this automatically removed the two non-default security groups and the (non-deletable-on-its-own) default security group as part of VPC deletion.
+
+## Incident During Cleanup: Blackhole Route
+
+After detaching the IGW but before deleting the associated route table, the `0.0.0.0/0` route inside `rtb-07c5580f5d27f9c36` did **not** disappear it persisted with a **blackhole** status.
+
+**Why this happens:** AWS route tables do not automatically detect or clean up routes whose target has been removed or detached. The route entry remains exactly as configured; traffic matching it is simply dropped, silently, with no error surfaced anywhere in the console beyond the "blackhole" status flag on the route itself.
+
+**Why it wasn't independently fixed here:** the entire route table was already scheduled for deletion in the next step, so the blackholed route was removed along with its container. No separate remediation was required in this specific case.
+
+**Why this matters beyond this cleanup:** in a live, production route table that is *not* being deleted for example, after a NAT Gateway failure or replacement a blackholed route would silently continue to exist and silently drop matching traffic. Nothing in the AWS control plane forces an operator to notice or fix it. This is a realistic, high-impact failure mode: a service that appears to have "no route table changes" in its history can still go dark because its route's target quietly disappeared underneath it.
+
+## Verification
+
+Post-deletion, the same audit commands used at the start of the session were re-run in full (VPCs, subnets, route tables, IGWs, NAT gateways, EIPs, instances, security groups). All returned empty except the expected single `default` security group with no associated VPC — confirming a true zero state with no drift, rather than trusting the console's success message alone.
+
+## Lessons Learned
+
+- **Project-close hygiene matters in shared accounts.** A finished project (GPU-Infra) left real, identifiable resources behind. A deliberate teardown step at project completion not just at "next project's cleanup" would have caught this earlier.
+- **AWS enforces dependency order through hard blocks, not silent orphaning.** Attempting to delete a route table with an active subnet association fails outright; AWS does not allow an inconsistent state to be created through a delete operation.
+- **Route tables do not self-heal when their target disappears.** A blackhole route is a real, observable state worth actively checking for after any IGW/NAT/gateway change in a live environment, not just assuming detach = clean.
+- **Verification must be independent of the tool's own success message.** Re-running the original audit commands, rather than trusting the console's "VPC deleted" confirmation, is what actually confirms a clean state.
+
+## Action Items
+
+- [ ] Adopt a standard "project close" checklist for future independent projects (this one included) that includes a full resource teardown and audit, not just a `git push` of final code.
+- [ ] When rebuilding the AWS Terraform Platform's networking module in Terraform, explicitly test the IGW-detach/blackhole scenario in a non-critical environment to observe `terraform plan` behavior against a blackholed route.
+- [ ] Cross-reference this postmortem with Postmortem `terraform-bootstrap` `AdministratorAccess` finding (IAM audit, same rebuild cycle).
