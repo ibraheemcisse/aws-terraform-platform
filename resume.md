@@ -107,7 +107,6 @@ Java 17, Spring Boot, Apache Kafka, Maven. Built as part of the JPMorgan Chase A
 
 ## Certifications
 
-- Certified Kubernetes Administrator (CKA)
 - AWS Solutions Architect Associate — SAA-C03 *(in progress)*
 - Microsoft Azure Fundamentals — AZ-900
 - Prometheus Monitoring & Alerting
