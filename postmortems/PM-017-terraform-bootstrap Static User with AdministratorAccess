@@ -1,121 +1,413 @@
-PM-017 — terraform-bootstrap Static User with AdministratorAccess
+# PM-017 — Terraform Bootstrap Identity with `AdministratorAccess`
 
-Date: August 31, 2026
-Severity: High — unmitigated risk, no known exploitation
-Status: Remediation planned
-Author: Ibrahim Cisse
+**Date:** August 31, 2026
+**Severity:** 🔴 High — Unmitigated Risk, No Known Exploitation
+**Status:** 🟡 Remediation Planned
+**Author:** Ibrahim Cisse
 
-Summary
+---
 
-During the IAM audit phase of the AWS Terraform Platform rebuild, the account's only IAM user, terraform-bootstrap, was found to have the AWS managed policy AdministratorAccess attached directly, alongside IAMUserChangePassword.
+## Summary
 
-The user authenticates with a static, long-lived access key rather than temporary credentials. No compromise occurred, but the configuration represented a significant and avoidable risk that had been present since the account's early setup.
+During the IAM audit performed as part of the AWS Terraform Platform rebuild, the account's only IAM user, `terraform-bootstrap`, was found to have the AWS-managed `AdministratorAccess` policy attached directly.
 
-Discovery
+The user also had `IAMUserChangePassword` attached and authenticated using a **static, long-lived access key**.
 
-While auditing IAM as part of the pre-rebuild cleanup, the attached policies for terraform-bootstrap were checked:
+No evidence of compromise or exploitation was identified. However, the configuration represented a significant and avoidable security risk that had persisted since the account's initial setup.
 
-aws iam list-attached-user-policies --user-name terraform-bootstrap
+The core issue was not the existence of a bootstrap identity. A static bootstrap credential can be necessary during the initial account provisioning phase. The issue was that the bootstrap identity **retained unrestricted administrator permissions long after the initial bootstrap requirements had been satisfied**.
 
-Result:
+The planned remediation is to convert `terraform-bootstrap` from a permanent administrator into a narrowly scoped bootstrap identity that can only assume a dedicated `terraform-deploy-role`.
 
+---
+
+## Discovery
+
+As part of the pre-rebuild IAM cleanup, the policies attached directly to `terraform-bootstrap` were reviewed:
+
+```bash
+aws iam list-attached-user-policies \
+  --user-name terraform-bootstrap
+```
+
+The user had the following AWS-managed policies attached:
+
+```json
 {
-    "AttachedPolicies": [
-        {
-            "PolicyName": "AdministratorAccess",
-            "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
-        },
-        {
-            "PolicyName": "IAMUserChangePassword",
-            "PolicyArn": "arn:aws:iam::aws:policy/IAMUserChangePassword"
-        }
-    ]
+  "AttachedPolicies": [
+    {
+      "PolicyName": "AdministratorAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+    },
+    {
+      "PolicyName": "IAMUserChangePassword",
+      "PolicyArn": "arn:aws:iam::aws:policy/IAMUserChangePassword"
+    }
+  ]
 }
+```
 
-No inline policies were attached (list-user-policies returned an empty list), and no IAM groups exist in the account.
+No inline policies were attached:
 
-This meant the entirety of this user's permissions came from one managed policy: unrestricted access to every action on every resource in the account.
+```bash
+aws iam list-user-policies \
+  --user-name terraform-bootstrap
+```
 
-Impact
+The command returned an empty policy list.
 
-AdministratorAccess is effectively equivalent to:
+There were also no IAM groups in the account.
 
-Action: *
+As a result, the effective permissions of `terraform-bootstrap` were dominated by a single AWS-managed policy:
+
+> `AdministratorAccess` — unrestricted access across the AWS account.
+
+---
+
+## Security Impact
+
+The effective permissions granted by `AdministratorAccess` are broadly equivalent to:
+
+```text
+Effect:   Allow
+Action:   *
 Resource: *
-Effect: Allow
+```
 
-A leaked terraform-bootstrap access key would provide full read and write access across every AWS service in the account.
+This means that compromise of the `terraform-bootstrap` access key could result in **full account-level access**.
 
-Because the identity has unrestricted IAM permissions, an attacker could create a new IAM user, generate new credentials, and attach AdministratorAccess to that identity. This would allow the attacker to maintain access even if the original access key were rotated or disabled.
+An attacker possessing the key could potentially:
 
-An attacker could also modify security controls, including CloudTrail configuration and other account-level settings.
+* Read and modify resources across AWS services
+* Create or modify IAM identities and policies
+* Generate additional credentials
+* Grant administrative permissions to other identities
+* Disable or alter security controls
+* Modify CloudTrail and other account-level configurations
+* Deploy or modify infrastructure
+* Create persistent access paths
+* Generate significant unexpected infrastructure costs
 
-Without active monitoring such as GuardDuty or CloudWatch alarms on sensitive API calls, activity performed with the compromised key could remain undetected until a visible side effect occurred, such as an unexpected bill increase or an unfamiliar resource appearing in the account.
+### Persistence Risk
 
-The result was a full, silent, and potentially persistent account compromise.
+The most significant concern was the combination of **long-lived credentials and unrestricted IAM permissions**.
 
-Root Cause
+An attacker would not necessarily need to continue using the original compromised access key. Because the identity had unrestricted IAM permissions, they could create another identity or credential with equivalent administrative access.
 
-terraform-bootstrap exists to solve a legitimate bootstrapping problem. At true account zero, no IAM role or OIDC trust relationship can exist yet because a role requires an existing identity to assume it.
+For example, an attacker could potentially:
 
-A static-credentialed identity is therefore required for the initial bootstrap process so Terraform can create the resources needed for ongoing automation, including the OIDC provider and github-actions-terraform-role.
+```text
+Compromised access key
+        │
+        ▼
+terraform-bootstrap
+        │
+        ├── Create IAM identity
+        ├── Create access credentials
+        └── Grant AdministratorAccess
+                    │
+                    ▼
+             Persistent access
+```
 
-The problem was not the existence of terraform-bootstrap. The problem was that AdministratorAccess was left attached indefinitely after the initial bootstrap phase.
+This creates a substantially larger blast radius than simply compromising a single automation credential.
 
-The account continued using an unrestricted static credential long after those permissions were actually required.
+### Detection Risk
 
-Fix
+The account also lacked a mature set of active detections around sensitive IAM and account-level API activity.
 
-Create a terraform-deploy-role with permissions scoped to the services required by the project:
+Without appropriate monitoring and alerting—for example, detections around unexpected IAM changes, credential creation, or security-control modifications—malicious activity could potentially remain unnoticed until a visible consequence occurred.
 
-VPC
-EKS
-IAM
-S3
-DynamoDB
-ECR
+Examples include:
 
-Remove AdministratorAccess from terraform-bootstrap and replace it with permission to perform only:
+* Unexpected resources appearing in the account
+* Significant billing increases
+* Unknown IAM identities
+* Modified logging configuration
+* Unexpected infrastructure changes
 
+The resulting risk was therefore not simply **"an administrator key could leak."**
+
+It was:
+
+> **A long-lived credential could provide unrestricted and potentially persistent control over the AWS account.**
+
+---
+
+## Root Cause
+
+### Why did `terraform-bootstrap` exist?
+
+The existence of the identity was legitimate.
+
+At true **account zero**, there is no existing IAM role or OIDC trust relationship that Terraform can immediately assume. A trusted identity must first exist to create the infrastructure required for subsequent authentication.
+
+The bootstrap sequence therefore requires an initial credential capable of creating resources such as:
+
+* IAM roles
+* The GitHub OIDC provider
+* `github-actions-terraform-role`
+* Other foundational Terraform resources
+
+In other words, the bootstrap credential solves a real **chicken-and-egg problem**:
+
+```text
+No IAM role exists
+        │
+        ▼
+Need an initial credential
+        │
+        ▼
+Bootstrap account infrastructure
+        │
+        ▼
+Create trusted IAM role / OIDC
+        │
+        ▼
+Use temporary credentials for normal operations
+```
+
+### What went wrong?
+
+The failure was in the **lifecycle of the bootstrap identity**.
+
+`terraform-bootstrap` was created for an initial provisioning phase, but its administrator-level permissions were never reduced afterward.
+
+The account therefore remained dependent on:
+
+```text
+Long-lived access key
+        +
+AdministratorAccess
+        +
+No enforced transition to temporary credentials
+```
+
+The temporary bootstrap state effectively became the permanent operating model.
+
+---
+
+## Remediation
+
+The target architecture is to separate **bootstrapping** from **normal infrastructure deployment**.
+
+A dedicated `terraform-deploy-role` will be created with permissions scoped to the AWS services required by the project:
+
+* VPC
+* EKS
+* IAM
+* S3
+* DynamoDB
+* ECR
+
+`AdministratorAccess` will then be removed from `terraform-bootstrap`.
+
+The bootstrap identity will instead be granted only:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "sts:AssumeRole",
+  "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/terraform-deploy-role"
+}
+```
+
+The exact role policy will be restricted to the required deployment capabilities rather than granting account-wide administration.
+
+### New Authentication Model
+
+The resulting flow will be:
+
+```text
+terraform-bootstrap
+        │
+        │ sts:AssumeRole
+        ▼
+terraform-deploy-role
+        │
+        │ temporary credentials
+        ▼
+Terraform
+        │
+        ├── VPC
+        ├── EKS
+        ├── IAM
+        ├── S3
+        ├── DynamoDB
+        └── ECR
+```
+
+Terraform will no longer perform normal infrastructure operations directly using the bootstrap user's credentials.
+
+Instead, the bootstrap key will only be used to request a temporary session for `terraform-deploy-role`.
+
+### Residual Risk
+
+This change significantly reduces the blast radius, but it does **not** make the bootstrap key risk-free.
+
+If the bootstrap access key were leaked, an attacker could still repeatedly call:
+
+```text
 sts:AssumeRole
+```
 
-The permission should be restricted to the ARN of terraform-deploy-role.
+until the key was disabled or rotated.
 
-Terraform should then assume terraform-deploy-role when provisioning infrastructure instead of using the terraform-bootstrap credentials directly.
+The important difference is that the attacker would be constrained by the permissions granted to `terraform-deploy-role`.
 
-This changes the security model from an unrestricted static administrator credential to a static bootstrap credential that can only request temporary sessions with the scoped permissions of terraform-deploy-role.
+The bootstrap credential would therefore no longer represent a permanent, unrestricted administrator credential.
 
-A leaked bootstrap key would still allow repeated AssumeRole calls until the key is disabled, but it would no longer provide permanent, unrestricted administrator access.
+---
 
-Lessons Learned
-Bootstrap identities can be legitimate, but their elevated permissions need an explicit lifecycle
-Permissions required during initial account setup should be reduced immediately after bootstrap is complete
-AssumeRole provides a smaller blast radius even when there is only one operator
-IAM audits should check the permissions attached to identities, not just which identities exist
-Least privilege needs to be revisited as infrastructure evolves rather than treated as a one-time configuration decision
-Long-lived static credentials should not retain administrator-level permissions after initial bootstrap
-Prevention
+## Before vs. After
 
-terraform-bootstrap will be restricted to sts:AssumeRole against terraform-deploy-role.
+|                               | Before                  | After                             |
+| ----------------------------- | ----------------------- | --------------------------------- |
+| Bootstrap identity            | IAM user                | IAM user                          |
+| Credential                    | Long-lived access key   | Long-lived bootstrap key          |
+| Direct admin access           | ✅ Yes                   | ❌ No                              |
+| `AdministratorAccess`         | ✅ Attached              | ❌ Removed                         |
+| Normal Terraform access       | Direct user credentials | Assumed IAM role                  |
+| Permissions                   | Account-wide            | Scoped to deployment requirements |
+| Credentials used by Terraform | Long-lived              | Temporary                         |
+| Blast radius                  | Full account            | Limited by deployment role        |
 
-Terraform and local CLI configuration will be updated to use the assumed role for normal infrastructure operations.
+The long-lived bootstrap credential remains a transitional requirement for account initialization, but **administrator permissions no longer remain attached to it**.
 
-The existing terraform-bootstrap access key will also be rotated as part of the remediation, regardless of whether compromise is suspected.
+---
 
-This change will be documented as part of the pre-rebuild account hardening work and cross-referenced with Postmortem #14 (networking cleanup).
+## Lessons Learned
 
-Action Items
+### 1. Bootstrap permissions need a defined lifecycle
 
-Create terraform-deploy-role with scoped permissions for VPC, EKS, IAM, S3, DynamoDB, and ECR
+A permission that is justified during initial provisioning does not automatically remain justified afterward.
 
-Detach AdministratorAccess from terraform-bootstrap
+Bootstrap identities should have an explicit transition from:
 
-Allow terraform-bootstrap to perform only sts:AssumeRole against terraform-deploy-role
+```text
+Bootstrap
+   ↓
+Harden
+   ↓
+Steady-state operation
+```
 
-Update Terraform provider configuration to assume terraform-deploy-role
+### 2. AssumeRole reduces blast radius
 
-Update local CLI profiles to use the assumed role
+Even when an initial static credential cannot immediately be eliminated, using it only to assume a scoped role provides a substantially better security boundary than granting it permanent administrative access.
 
-Rotate the existing terraform-bootstrap access key
+### 3. IAM audits must evaluate permissions, not just identities
 
-Cross-reference with Postmortem #14 as part of the pre-rebuild account hardening pass
+Knowing which IAM users exist is not enough.
+
+An effective IAM review should answer:
+
+* What can each identity do?
+* How is it authenticated?
+* Are credentials long-lived?
+* Can the identity create additional credentials?
+* Can it modify IAM?
+* Can it establish persistence?
+* Are its permissions still justified by its current purpose?
+
+### 4. Least privilege is continuous
+
+Least privilege is not a one-time Terraform configuration task.
+
+Infrastructure changes over time, and permissions that were reasonable during account creation may become excessive later.
+
+### 5. Static credentials should have the smallest possible authority
+
+If a long-lived credential cannot yet be eliminated, its permissions should be minimized aggressively.
+
+The goal should be:
+
+```text
+Static credential
+        ↓
+Minimal bootstrap authority
+        ↓
+Temporary credentials
+        ↓
+Scoped infrastructure permissions
+```
+
+—not:
+
+```text
+Static credential
+        ↓
+AdministratorAccess
+        ↓
+Permanent infrastructure access
+```
+
+---
+
+## Prevention
+
+The following controls will be incorporated into the account hardening process:
+
+* Restrict `terraform-bootstrap` to `sts:AssumeRole`
+* Scope `sts:AssumeRole` specifically to `terraform-deploy-role`
+* Use `terraform-deploy-role` for normal Terraform operations
+* Update local AWS CLI profiles to use the assumed role
+* Update Terraform provider configuration accordingly
+* Rotate the existing `terraform-bootstrap` access key
+* Review IAM permissions during future infrastructure audits
+* Treat bootstrap identities as temporary infrastructure with an explicit lifecycle
+* Cross-reference this remediation with **Postmortem #14 — Networking Cleanup**
+
+The intended steady-state architecture is therefore:
+
+```text
+                 ┌──────────────────────┐
+                 │  terraform-bootstrap │
+                 │   Long-lived key     │
+                 └──────────┬───────────┘
+                            │
+                            │ sts:AssumeRole
+                            ▼
+                 ┌──────────────────────┐
+                 │ terraform-deploy-role│
+                 │   Scoped permissions │
+                 └──────────┬───────────┘
+                            │
+                            │ Temporary credentials
+                            ▼
+                 ┌──────────────────────┐
+                 │       Terraform      │
+                 └──────────┬───────────┘
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+            VPC            EKS        IAM / S3 / ECR
+                                      / DynamoDB
+```
+
+---
+
+## Action Items
+
+* [ ] Create `terraform-deploy-role` with scoped permissions for VPC, EKS, IAM, S3, DynamoDB, and ECR
+* [ ] Detach `AdministratorAccess` from `terraform-bootstrap`
+* [ ] Restrict `terraform-bootstrap` to `sts:AssumeRole` against `terraform-deploy-role`
+* [ ] Update Terraform provider configuration to assume `terraform-deploy-role`
+* [ ] Update local AWS CLI profiles to use the assumed role
+* [ ] Rotate the existing `terraform-bootstrap` access key
+* [ ] Verify no other identities retain unnecessary administrator-level permissions
+* [ ] Cross-reference with **Postmortem #14** during the pre-rebuild account hardening pass
+
+---
+
+## Final Assessment
+
+There was **no known exploitation**, but the discovered configuration represented a high-impact security weakness.
+
+The combination of a **long-lived access key**, **unrestricted IAM permissions**, and the ability to **create persistent administrative access** meant that compromise of a single credential could have resulted in full AWS account compromise.
+
+The remediation does not attempt to eliminate the bootstrap identity prematurely. Instead, it establishes a clear security boundary:
+
+> **The bootstrap credential bootstraps the account. The deployment role operates the account.**
+
+This preserves the practical requirements of initial Terraform provisioning while removing unnecessary administrator privileges from the long-lived credential.
