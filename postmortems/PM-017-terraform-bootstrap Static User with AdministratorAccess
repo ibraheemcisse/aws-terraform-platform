@@ -1,7 +1,3 @@
-Yep. I’d keep it **clean, professional, and GitHub-native**—no excessive emojis, no over-designed cards, just good hierarchy and spacing.
-
-Here’s a neater version of the opening:
-
 # PM-017 — Terraform Bootstrap Identity with `AdministratorAccess`
 
 > **Security Postmortem · AWS IAM · Terraform Platform Rebuild**
