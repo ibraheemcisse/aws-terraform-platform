@@ -8,3 +8,9 @@ variable "account_id" {
   description = "AWS account ID — used to ensure globally unique S3 bucket name"
   type        = string
 }
+
+variable "github_repo" {
+  description = "GitHub repo in owner/name format — scopes OIDC trust to this repo"
+  type        = string
+  default     = "ibraheemcisse/aws-terraform-platform"
+}
