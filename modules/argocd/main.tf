@@ -61,31 +61,31 @@ resource "null_resource" "root_app" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      aws eks update-kubeconfig --name ${var.cluster_name} --region us-east-1
-      kubectl apply -f - <<EOF
-      apiVersion: argoproj.io/v1alpha1
-      kind: Application
-      metadata:
-        name: root-app
-        namespace: argocd
-        finalizers:
-          - resources-finalizer.argocd.argoproj.io
-      spec:
-        project: default
-        source:
-          repoURL: ${var.repo_url}
-          targetRevision: ${var.target_revision}
-          path: k8s/apps
-        destination:
-          server: https://kubernetes.default.svc
-          namespace: argocd
-        syncPolicy:
-          automated:
-            prune: true
-            selfHeal: true
-          syncOptions:
-            - CreateNamespace=true
-      EOF
+      aws eks update-kubeconfig --name ${var.cluster_name} --region us-east-1 && \
+      kubectl apply -f - <<'MANIFEST'
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ${var.repo_url}
+    targetRevision: ${var.target_revision}
+    path: k8s/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+MANIFEST
     EOT
   }
 
