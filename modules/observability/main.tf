@@ -105,7 +105,44 @@ resource "aws_eks_pod_identity_association" "fluent_bit" {
   tags            = local.common_tags
 }
 
-# ── CLOUDWATCH ALARMS ─────────────────────────────────────────────────
+# ── CONTAINER INSIGHTS QUICK START ───────────────────────────────────
+# Deploys CloudWatch Agent + Fluent Bit DaemonSets via the AWS-provided
+# quick start manifest. Uses local-exec so no Helm/K8s provider config
+# is needed in this module.
+resource "null_resource" "container_insights" {
+  triggers = {
+    cluster_name = var.cluster_name
+    region       = data.aws_region.current.name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${var.cluster_name} --region ${data.aws_region.current.name} && \
+      ClusterName=${var.cluster_name} && \
+      RegionName=${data.aws_region.current.name} && \
+      FluentBitHttpPort='2020' && \
+      FluentBitReadFromHead='Off' && \
+      [[ ${var.cluster_name} =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*$ ]] && echo "Cluster name valid" && \
+      curl -s https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/latest/k8s-deployment-manifest-templates/deployment-mode/daemonset/container-insights-monitoring/quickstart/cwagent-fluent-bit-quickstart.yaml | \
+        sed "s/{{cluster_name}}/$ClusterName/g" | \
+        sed "s/{{region_name}}/$RegionName/g" | \
+        sed "s/{{http_server_toggle}}/On/g" | \
+        sed "s/{{http_server_port}}/$FluentBitHttpPort/g" | \
+        sed "s/{{read_from_head}}/$FluentBitReadFromHead/g" | \
+        sed "s/{{read_from_tail}}/On/g" | \
+        kubectl apply -f -
+    EOT
+  }
+
+  depends_on = [
+    aws_eks_pod_identity_association.cloudwatch_agent,
+    aws_eks_pod_identity_association.fluent_bit,
+    aws_cloudwatch_log_group.application,
+    aws_cloudwatch_log_group.performance,
+    aws_cloudwatch_log_group.host,
+    aws_cloudwatch_log_group.dataplane,
+  ]
+}
 resource "aws_cloudwatch_metric_alarm" "node_cpu_high" {
   alarm_name          = "${var.cluster_name}-node-cpu-high"
   comparison_operator = "GreaterThanThreshold"
