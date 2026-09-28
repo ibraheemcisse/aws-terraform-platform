@@ -131,28 +131,10 @@ resource "aws_eks_addon" "ebs_csi" {
 }
 
 # ── GITHUB ACTIONS EKS ACCESS ────────────────────────────────────────
-resource "aws_eks_access_entry" "github_actions" {
-  cluster_name  = aws_eks_cluster.this.name
-  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/github-actions-terraform-role"
-  type          = "STANDARD"
-  tags          = local.common_tags
-
-  lifecycle {
-    ignore_changes = [principal_arn]
-  }
-}
-
-resource "aws_eks_access_policy_association" "github_actions_admin" {
-  cluster_name  = aws_eks_cluster.this.name
-  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/github-actions-terraform-role"
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope {
-    type = "cluster"
-  }
-
-  depends_on = [aws_eks_access_entry.github_actions]
-}
+# Access entry is created manually or via bootstrap_cluster_creator_admin_permissions.
+# Managing it here causes 409 conflicts on re-apply since EKS auto-creates
+# an entry for the cluster creator. The role retains cluster-admin access
+# through the existing access entry created during the first apply.
 
 resource "aws_eks_addon" "pod_identity_agent" {
   cluster_name                = aws_eks_cluster.this.name
