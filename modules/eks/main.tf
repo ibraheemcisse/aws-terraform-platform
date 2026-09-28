@@ -136,6 +136,10 @@ resource "aws_eks_access_entry" "github_actions" {
   principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/github-actions-terraform-role"
   type          = "STANDARD"
   tags          = local.common_tags
+
+  lifecycle {
+    ignore_changes = [principal_arn]
+  }
 }
 
 resource "aws_eks_access_policy_association" "github_actions_admin" {

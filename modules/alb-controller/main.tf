@@ -63,6 +63,9 @@ resource "helm_release" "alb_controller" {
   chart      = "aws-load-balancer-controller"
   namespace  = local.namespace
   version    = "1.7.1"
+  timeout    = 600
+  atomic     = false
+  wait       = true
 
   set {
     name  = "clusterName"
