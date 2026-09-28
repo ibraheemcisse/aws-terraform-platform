@@ -117,7 +117,7 @@ resource "null_resource" "container_insights" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/sh", "-c"]
-    command     = "aws eks update-kubeconfig --name ${var.cluster_name} --region ${data.aws_region.current.name} && curl -s https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/latest/k8s-deployment-manifest-templates/deployment-mode/daemonset/container-insights-monitoring/quickstart/cwagent-fluent-bit-quickstart.yaml | sed 's/{{cluster_name}}/${var.cluster_name}/g' | sed 's/{{region_name}}/${data.aws_region.current.name}/g' | sed 's/{{http_server_toggle}}/On/g' | sed 's/{{http_server_port}}/2020/g' | sed 's/{{read_from_head}}/Off/g' | sed 's/{{read_from_tail}}/On/g' | kubectl apply -f -"
+    command     = "aws eks update-kubeconfig --name ${var.cluster_name} --region ${data.aws_region.current.name} && curl -s https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/latest/k8s-deployment-manifest-templates/deployment-mode/daemonset/container-insights-monitoring/quickstart/cwagent-fluent-bit-quickstart.yaml | sed 's/{{cluster_name}}/${var.cluster_name}/g' | sed 's/{{region_name}}/${data.aws_region.current.name}/g' | sed 's/{{http_server_toggle}}/On/g' | sed 's/{{http_server_port}}/2020/g' | sed 's/{{read_from_head}}/Off/g' | sed 's/{{read_from_tail}}/On/g' | kubectl apply -f - || true"
   }
 
   depends_on = [
