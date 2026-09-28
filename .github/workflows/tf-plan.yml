@@ -14,7 +14,7 @@ permissions:
   pull-requests: write
 
 env:
-  TF_VERSION: "1.5.0"
+  TF_VERSION: "1.6.0"
   AWS_REGION: "us-east-1"
   ROLE_ARN: "arn:aws:iam::406260455716:role/github-actions-terraform-role"
 
