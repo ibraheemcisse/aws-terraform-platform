@@ -43,6 +43,13 @@ module "alb_controller" {
   tags         = local.common_tags
 }
 
+# Wait for ALB controller webhook pod to become ready before ArgoCD
+# creates Service resources that trigger the mutating webhook.
+resource "time_sleep" "alb_controller_ready" {
+  create_duration = "90s"
+  depends_on      = [module.alb_controller]
+}
+
 module "argocd" {
   source = "../../modules/argocd"
 
@@ -51,6 +58,8 @@ module "argocd" {
   repo_url        = "https://github.com/ibraheemcisse/aws-terraform-platform"
   target_revision = "main"
   tags            = local.common_tags
+
+  depends_on = [time_sleep.alb_controller_ready]
 }
 
 module "observability" {
